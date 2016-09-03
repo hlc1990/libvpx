@@ -32,6 +32,30 @@ extern "C" {
 #include <errno.h>  // NOLINT
 #include <process.h>  // NOLINT
 #include <windows.h>  // NOLINT
+
+#ifdef WINRT
+#  ifdef InitializeCriticalSection
+#    undef InitializeCriticalSection
+#  endif
+#  define InitializeCriticalSection(a) InitializeCriticalSectionEx(a, 0, 0)
+
+#  ifdef WaitForSingleObject
+#    undef WaitForSingleObject
+#  endif
+#  define WaitForSingleObject(a, b) WaitForSingleObjectEx(a, b, FALSE)
+
+#  ifdef CreateSemaphore
+#    undef CreateSemaphore
+#  endif
+#  define CreateSemaphore(a, b, c, d) CreateSemaphoreEx(a, b, c ,d, 0, SEMAPHORE_ALL_ACCESS)
+
+#  ifdef CreateEvent
+#    undef CreateEvent
+#  endif
+#  define CreateEvent(lpEventAttributes, bManualReset, bInitialState, lpName) CreateEventEx(lpEventAttributes, lpName, (bManualReset?CREATE_EVENT_MANUAL_RESET:0 | bInitialState?CREATE_EVENT_INITIAL_SET:0), EVENT_ALL_ACCESS)
+#endif
+
+
 typedef HANDLE pthread_t;
 typedef CRITICAL_SECTION pthread_mutex_t;
 typedef struct {
@@ -51,12 +75,23 @@ static INLINE int pthread_create(pthread_t* const thread, const void* attr,
                                  unsigned int (__stdcall *start)(void*),
                                  void* arg) {
   (void)attr;
+
+#if defined(WINRT)
+  *thread = (pthread_t)CreateThread(NULL,  /* void *security */
+    0,    /* unsigned stack_size */ 
+    start,
+    arg,
+    0,   /* unsigned initflag */
+    NULL); /* unsigned *thrdaddr */
+#else
   *thread = (pthread_t)_beginthreadex(NULL,   /* void *security */
-                                      0,      /* unsigned stack_size */
-                                      start,
-                                      arg,
-                                      0,      /* unsigned initflag */
-                                      NULL);  /* unsigned *thrdaddr */
+	  0,      /* unsigned stack_size */
+	  start,
+	  arg,
+	  0,      /* unsigned initflag */
+	  NULL);  /* unsigned *thrdaddr */
+#endif
+
   if (*thread == NULL) return 1;
   SetThreadPriority(*thread, THREAD_PRIORITY_ABOVE_NORMAL);
   return 0;

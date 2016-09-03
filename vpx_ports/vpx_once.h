@@ -48,6 +48,11 @@
  * As a static, once_state will be zero-initialized as program start.
  */
 static LONG once_state;
+
+#ifdef WINRT
+#define InitializeCriticalSection(a) InitializeCriticalSectionEx(a, 0, 0)
+#endif
+
 static void once(void (*func)(void))
 {
     /* Try to advance once_state from its initial value of 0 to 1.

@@ -82,11 +82,22 @@ extern "C" {
 #if defined(_WIN32) && !HAVE_PTHREAD_H
 #define sem_t HANDLE
 #define pause(voidpara) __asm PAUSE
-#define sem_init(sem, sem_attr1, sem_init_value) (int)((*sem = CreateSemaphore(NULL,0,32768,NULL))==NULL)
-#define sem_wait(sem) (int)(WAIT_OBJECT_0 != WaitForSingleObject(*sem,INFINITE))
+
+#ifdef WINRT
+  #define InitializeCriticalSection(a) InitializeCriticalSectionEx(a, 0, 0)
+#endif
+
+#ifdef WINRT
+#define sem_init(sem, sem_attr1, sem_init_value) (int)((*sem = CreateSemaphoreEx(NULL,0,32768,NULL,0,SEMAPHORE_ALL_ACCESS))==NULL)
+  #define sem_wait(sem) (int)(WAIT_OBJECT_0 != WaitForSingleObjectEx(*sem,INFINITE,FALSE))
+#else
+  #define sem_init(sem, sem_attr1, sem_init_value) (int)((*sem = CreateSemaphore(NULL,0,32768,NULL))==NULL)
+  #define sem_wait(sem) (int)(WAIT_OBJECT_0 != WaitForSingleObject(*sem,INFINITE))
+#endif
 #define sem_post(sem) ReleaseSemaphore(*sem,1,NULL)
 #define sem_destroy(sem) if(*sem)((int)(CloseHandle(*sem))==TRUE)
 #define thread_sleep(nms) Sleep(nms)
+
 
 #elif defined(__OS2__)
 typedef struct
