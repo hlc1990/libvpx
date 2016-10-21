@@ -40,14 +40,6 @@
 #if CONFIG_MULTITHREAD && defined(_WIN32)
 #include <windows.h>
 #include <stdlib.h>
-
-#ifdef WINRT
-# ifdef InitializeCriticalSection
-#  undef InitializeCriticalSection
-# endif /* InitializeCriticalSection */
-# define InitializeCriticalSection(a) InitializeCriticalSectionEx(a, 0, 0)
-#endif /* WINRT */
-
 /* Declare a per-compilation-unit state variable to track the progress
  * of calling func() only once. This must be at global scope because
  * local initializers are not thread-safe in MSVC prior to Visual

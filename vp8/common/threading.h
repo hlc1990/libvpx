@@ -92,18 +92,11 @@ extern "C" {
 #define pause(voidpara) __asm PAUSE
 
 #ifdef WINRT
-# ifdef InitializeCriticalSection
-#  undef InitializeCriticalSection
-# endif /* InitializeCriticalSection */
-#define InitializeCriticalSection(a) InitializeCriticalSectionEx(a, 0, 0)
-
 #define sem_init(sem, sem_attr1, sem_init_value) \
   (int)((*sem = CreateSemaphoreEx(NULL, 0, 32768, NULL, 0, SEMAPHORE_ALL_ACCESS)) == NULL)
 #define sem_wait(sem) \
- (int)(WAIT_OBJECT_0 != WaitForSingleObjectEx(*sem,INFINITE,FALSE))
-
+  (int)(WAIT_OBJECT_0 != WaitForSingleObjectEx(*sem,INFINITE,FALSE))
 #else
-
 #define sem_init(sem, sem_attr1, sem_init_value) \
   (int)((*sem = CreateSemaphore(NULL, 0, 32768, NULL)) == NULL)
 #define sem_wait(sem) \
