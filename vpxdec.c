@@ -9,11 +9,11 @@
  */
 
 #include <assert.h>
+#include <limits.h>
+#include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <stdarg.h>
 #include <string.h>
-#include <limits.h>
 
 #include "./vpx_config.h"
 
@@ -92,31 +92,24 @@ static const arg_def_t md5arg =
 static const arg_def_t outbitdeptharg =
     ARG_DEF(NULL, "output-bit-depth", 1, "Output bit-depth for decoded frames");
 #endif
+static const arg_def_t svcdecodingarg = ARG_DEF(
+    NULL, "svc-decode-layer", 1, "Decode SVC stream up to given spatial layer");
+static const arg_def_t framestatsarg =
+    ARG_DEF(NULL, "framestats", 1, "Output per-frame stats (.csv format)");
 
-static const arg_def_t *all_args[] = { &codecarg,
-                                       &use_yv12,
-                                       &use_i420,
-                                       &flipuvarg,
-                                       &rawvideo,
-                                       &noblitarg,
-                                       &progressarg,
-                                       &limitarg,
-                                       &skiparg,
-                                       &postprocarg,
-                                       &summaryarg,
-                                       &outputfile,
-                                       &threadsarg,
-                                       &frameparallelarg,
-                                       &verbosearg,
-                                       &scalearg,
-                                       &fb_arg,
-                                       &md5arg,
-                                       &error_concealment,
-                                       &continuearg,
+static const arg_def_t *all_args[] = {
+  &codecarg,          &use_yv12,         &use_i420,
+  &flipuvarg,         &rawvideo,         &noblitarg,
+  &progressarg,       &limitarg,         &skiparg,
+  &postprocarg,       &summaryarg,       &outputfile,
+  &threadsarg,        &frameparallelarg, &verbosearg,
+  &scalearg,          &fb_arg,           &md5arg,
+  &error_concealment, &continuearg,
 #if CONFIG_VP9_HIGHBITDEPTH
-                                       &outbitdeptharg,
+  &outbitdeptharg,
 #endif
-                                       NULL };
+  &svcdecodingarg,    &framestatsarg,    NULL
+};
 
 #if CONFIG_VP8_DECODER
 static const arg_def_t addnoise_level =
@@ -125,30 +118,11 @@ static const arg_def_t deblock =
     ARG_DEF(NULL, "deblock", 0, "Enable VP8 deblocking");
 static const arg_def_t demacroblock_level = ARG_DEF(
     NULL, "demacroblock-level", 1, "Enable VP8 demacroblocking, w/ level");
-static const arg_def_t pp_debug_info =
-    ARG_DEF(NULL, "pp-debug-info", 1, "Enable VP8 visible debug info");
-static const arg_def_t pp_disp_ref_frame =
-    ARG_DEF(NULL, "pp-dbg-ref-frame", 1,
-            "Display only selected reference frame per macro block");
-static const arg_def_t pp_disp_mb_modes = ARG_DEF(
-    NULL, "pp-dbg-mb-modes", 1, "Display only selected macro block modes");
-static const arg_def_t pp_disp_b_modes =
-    ARG_DEF(NULL, "pp-dbg-b-modes", 1, "Display only selected block modes");
-static const arg_def_t pp_disp_mvs =
-    ARG_DEF(NULL, "pp-dbg-mvs", 1, "Draw only selected motion vectors");
 static const arg_def_t mfqe =
     ARG_DEF(NULL, "mfqe", 0, "Enable multiframe quality enhancement");
 
-static const arg_def_t *vp8_pp_args[] = { &addnoise_level,
-                                          &deblock,
-                                          &demacroblock_level,
-                                          &pp_debug_info,
-                                          &pp_disp_ref_frame,
-                                          &pp_disp_mb_modes,
-                                          &pp_disp_b_modes,
-                                          &pp_disp_mvs,
-                                          &mfqe,
-                                          NULL };
+static const arg_def_t *vp8_pp_args[] = { &addnoise_level, &deblock,
+                                          &demacroblock_level, &mfqe, NULL };
 #endif
 
 #if CONFIG_LIBYUV
@@ -514,6 +488,7 @@ static int main_loop(int argc, const char **argv_) {
   vpx_codec_ctx_t decoder;
   char *fn = NULL;
   int i;
+  int ret = EXIT_FAILURE;
   uint8_t *buf = NULL;
   size_t bytes_in_buffer = 0, buffer_size = 0;
   FILE *infile;
@@ -537,12 +512,10 @@ static int main_loop(int argc, const char **argv_) {
 #if CONFIG_VP9_HIGHBITDEPTH
   unsigned int output_bit_depth = 0;
 #endif
+  int svc_decoding = 0;
+  int svc_spatial_layer = 0;
 #if CONFIG_VP8_DECODER
-  vp8_postproc_cfg_t vp8_pp_cfg = { 0 };
-  int vp8_dbg_color_ref_frame = 0;
-  int vp8_dbg_color_mb_modes = 0;
-  int vp8_dbg_color_b_modes = 0;
-  int vp8_dbg_display_mv = 0;
+  vp8_postproc_cfg_t vp8_pp_cfg = { 0, 0, 0 };
 #endif
   int frames_corrupted = 0;
   int dec_flags = 0;
@@ -558,6 +531,8 @@ static int main_loop(int argc, const char **argv_) {
   const char *outfile_pattern = NULL;
   char outfile_name[PATH_MAX] = { 0 };
   FILE *outfile = NULL;
+
+  FILE *framestats_file = NULL;
 
   MD5Context md5_ctx;
   unsigned char md5_digest[16];
@@ -632,6 +607,16 @@ static int main_loop(int argc, const char **argv_) {
       output_bit_depth = arg_parse_uint(&arg);
     }
 #endif
+    else if (arg_match(&arg, &svcdecodingarg, argi)) {
+      svc_decoding = 1;
+      svc_spatial_layer = arg_parse_uint(&arg);
+    } else if (arg_match(&arg, &framestatsarg, argi)) {
+      framestats_file = fopen(arg.val, "w");
+      if (!framestats_file) {
+        die("Error: Could not open --framestats file (%s) for writing.\n",
+            arg.val);
+      }
+    }
 #if CONFIG_VP8_DECODER
     else if (arg_match(&arg, &addnoise_level, argi)) {
       postproc = 1;
@@ -647,37 +632,6 @@ static int main_loop(int argc, const char **argv_) {
     } else if (arg_match(&arg, &mfqe, argi)) {
       postproc = 1;
       vp8_pp_cfg.post_proc_flag |= VP8_MFQE;
-    } else if (arg_match(&arg, &pp_debug_info, argi)) {
-      unsigned int level = arg_parse_uint(&arg);
-
-      postproc = 1;
-      vp8_pp_cfg.post_proc_flag &= ~0x7;
-
-      if (level) vp8_pp_cfg.post_proc_flag |= level;
-    } else if (arg_match(&arg, &pp_disp_ref_frame, argi)) {
-      unsigned int flags = arg_parse_int(&arg);
-      if (flags) {
-        postproc = 1;
-        vp8_dbg_color_ref_frame = flags;
-      }
-    } else if (arg_match(&arg, &pp_disp_mb_modes, argi)) {
-      unsigned int flags = arg_parse_int(&arg);
-      if (flags) {
-        postproc = 1;
-        vp8_dbg_color_mb_modes = flags;
-      }
-    } else if (arg_match(&arg, &pp_disp_b_modes, argi)) {
-      unsigned int flags = arg_parse_int(&arg);
-      if (flags) {
-        postproc = 1;
-        vp8_dbg_color_b_modes = flags;
-      }
-    } else if (arg_match(&arg, &pp_disp_mvs, argi)) {
-      unsigned int flags = arg_parse_int(&arg);
-      if (flags) {
-        postproc = 1;
-        vp8_dbg_display_mv = flags;
-      }
     } else if (arg_match(&arg, &error_concealment, argi)) {
       ec_enabled = 1;
     }
@@ -777,9 +731,16 @@ static int main_loop(int argc, const char **argv_) {
                          dec_flags)) {
     fprintf(stderr, "Failed to initialize decoder: %s\n",
             vpx_codec_error(&decoder));
-    return EXIT_FAILURE;
+    goto fail2;
   }
-
+  if (svc_decoding) {
+    if (vpx_codec_control(&decoder, VP9_DECODE_SVC_SPATIAL_LAYER,
+                          svc_spatial_layer)) {
+      fprintf(stderr, "Failed to set spatial layer for svc decode: %s\n",
+              vpx_codec_error(&decoder));
+      goto fail;
+    }
+  }
   if (!quiet) fprintf(stderr, "%s\n", decoder.name);
 
 #if CONFIG_VP8_DECODER
@@ -787,38 +748,7 @@ static int main_loop(int argc, const char **argv_) {
       vpx_codec_control(&decoder, VP8_SET_POSTPROC, &vp8_pp_cfg)) {
     fprintf(stderr, "Failed to configure postproc: %s\n",
             vpx_codec_error(&decoder));
-    return EXIT_FAILURE;
-  }
-
-  if (vp8_dbg_color_ref_frame &&
-      vpx_codec_control(&decoder, VP8_SET_DBG_COLOR_REF_FRAME,
-                        vp8_dbg_color_ref_frame)) {
-    fprintf(stderr, "Failed to configure reference block visualizer: %s\n",
-            vpx_codec_error(&decoder));
-    return EXIT_FAILURE;
-  }
-
-  if (vp8_dbg_color_mb_modes &&
-      vpx_codec_control(&decoder, VP8_SET_DBG_COLOR_MB_MODES,
-                        vp8_dbg_color_mb_modes)) {
-    fprintf(stderr, "Failed to configure macro block visualizer: %s\n",
-            vpx_codec_error(&decoder));
-    return EXIT_FAILURE;
-  }
-
-  if (vp8_dbg_color_b_modes &&
-      vpx_codec_control(&decoder, VP8_SET_DBG_COLOR_B_MODES,
-                        vp8_dbg_color_b_modes)) {
-    fprintf(stderr, "Failed to configure block visualizer: %s\n",
-            vpx_codec_error(&decoder));
-    return EXIT_FAILURE;
-  }
-
-  if (vp8_dbg_display_mv &&
-      vpx_codec_control(&decoder, VP8_SET_DBG_DISPLAY_MV, vp8_dbg_display_mv)) {
-    fprintf(stderr, "Failed to configure motion vector visualizer: %s\n",
-            vpx_codec_error(&decoder));
-    return EXIT_FAILURE;
+    goto fail;
   }
 #endif
 
@@ -837,12 +767,14 @@ static int main_loop(int argc, const char **argv_) {
                                              &ext_fb_list)) {
       fprintf(stderr, "Failed to configure external frame buffers: %s\n",
               vpx_codec_error(&decoder));
-      return EXIT_FAILURE;
+      goto fail;
     }
   }
 
   frame_avail = 1;
   got_data = 0;
+
+  if (framestats_file) fprintf(framestats_file, "bytes,qp\n");
 
   /* Decode file */
   while (frame_avail || got_data) {
@@ -864,9 +796,19 @@ static int main_loop(int argc, const char **argv_) {
           const char *detail = vpx_codec_error_detail(&decoder);
           warn("Failed to decode frame %d: %s", frame_in,
                vpx_codec_error(&decoder));
-
           if (detail) warn("Additional information: %s", detail);
+          corrupted = 1;
           if (!keep_going) goto fail;
+        }
+
+        if (framestats_file) {
+          int qp;
+          if (vpx_codec_control(&decoder, VPXD_GET_LAST_QUANTIZER, &qp)) {
+            warn("Failed VPXD_GET_LAST_QUANTIZER: %s",
+                 vpx_codec_error(&decoder));
+            if (!keep_going) goto fail;
+          }
+          fprintf(framestats_file, "%d,%d\n", (int)bytes_in_buffer, qp);
         }
 
         vpx_usec_timer_mark(&timer);
@@ -884,6 +826,8 @@ static int main_loop(int argc, const char **argv_) {
       // Flush the decoder in frame parallel decode.
       if (vpx_codec_decode(&decoder, NULL, 0, NULL, 0)) {
         warn("Failed to flush decoder: %s", vpx_codec_error(&decoder));
+        corrupted = 1;
+        if (!keep_going) goto fail;
       }
     }
 
@@ -896,7 +840,7 @@ static int main_loop(int argc, const char **argv_) {
     vpx_usec_timer_mark(&timer);
     dx_time += (unsigned int)vpx_usec_timer_elapsed(&timer);
 
-    if (!frame_parallel &&
+    if (!frame_parallel && !corrupted &&
         vpx_codec_control(&decoder, VP8D_GET_FRAME_CORRUPTED, &corrupted)) {
       warn("Failed VP8_GET_FRAME_CORRUPTED: %s", vpx_codec_error(&decoder));
       if (!keep_going) goto fail;
@@ -946,7 +890,7 @@ static int main_loop(int argc, const char **argv_) {
                   "Scaling is disabled in this configuration. "
                   "To enable scaling, configure with --enable-libyuv\n",
                   vpx_codec_error(&decoder));
-          return EXIT_FAILURE;
+          goto fail;
 #endif
         }
       }
@@ -1057,16 +1001,20 @@ static int main_loop(int argc, const char **argv_) {
     fprintf(stderr, "\n");
   }
 
-  if (frames_corrupted)
+  if (frames_corrupted) {
     fprintf(stderr, "WARNING: %d frames corrupted.\n", frames_corrupted);
+  } else {
+    ret = EXIT_SUCCESS;
+  }
 
 fail:
 
   if (vpx_codec_destroy(&decoder)) {
     fprintf(stderr, "Failed to destroy decoder: %s\n",
             vpx_codec_error(&decoder));
-    return EXIT_FAILURE;
   }
+
+fail2:
 
   if (!noblit && single_file) {
     if (do_md5) {
@@ -1095,9 +1043,11 @@ fail:
   free(ext_fb_list.ext_fb);
 
   fclose(infile);
+  if (framestats_file) fclose(framestats_file);
+
   free(argv);
 
-  return frames_corrupted ? EXIT_FAILURE : EXIT_SUCCESS;
+  return ret;
 }
 
 int main(int argc, const char **argv_) {

@@ -309,10 +309,13 @@ void tx_counts_to_branch_counts_8x8(const unsigned int *tx_count_8x8p,
 
 static const vpx_prob default_skip_probs[SKIP_CONTEXTS] = { 192, 128, 64 };
 
-static const vpx_prob default_switchable_interp_prob
-    [SWITCHABLE_FILTER_CONTEXTS][SWITCHABLE_FILTERS - 1] = {
-      { 235, 162 }, { 36, 255 }, { 34, 3 }, { 149, 144 },
-    };
+static const vpx_prob default_switchable_interp_prob[SWITCHABLE_FILTER_CONTEXTS]
+                                                    [SWITCHABLE_FILTERS - 1] = {
+                                                      { 235, 162 },
+                                                      { 36, 255 },
+                                                      { 34, 3 },
+                                                      { 149, 144 },
+                                                    };
 
 static void init_mode_probs(FRAME_CONTEXT *fc) {
   vp9_copy(fc->uv_mode_prob, default_if_uv_probs);

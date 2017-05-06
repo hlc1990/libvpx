@@ -29,10 +29,13 @@
 #include "vp9/common/vp9_thread_common.h"
 #include "vp9/common/vp9_onyxc_int.h"
 
+#include "vp9/encoder/vp9_alt_ref_aq.h"
 #include "vp9/encoder/vp9_aq_cyclicrefresh.h"
 #include "vp9/encoder/vp9_context_tree.h"
 #include "vp9/encoder/vp9_encodemb.h"
+#include "vp9/encoder/vp9_ethread.h"
 #include "vp9/encoder/vp9_firstpass.h"
+#include "vp9/encoder/vp9_job_queue.h"
 #include "vp9/encoder/vp9_lookahead.h"
 #include "vp9/encoder/vp9_mbgraph.h"
 #include "vp9/encoder/vp9_mcomp.h"
@@ -116,6 +119,9 @@ typedef enum {
   COMPLEXITY_AQ = 2,
   CYCLIC_REFRESH_AQ = 3,
   EQUATOR360_AQ = 4,
+  // AQ based on lookahead temporal
+  // variance (only valid for altref frames)
+  LOOKAHEAD_AQ = 5,
   AQ_MODE_COUNT  // This should always be the last member of the enum
 } AQ_MODE;
 
@@ -124,6 +130,14 @@ typedef enum {
   RESIZE_FIXED = 1,   // All frames are coded at the specified dimension.
   RESIZE_DYNAMIC = 2  // Coded size of each frame is determined by the codec.
 } RESIZE_TYPE;
+
+typedef enum {
+  kInvalid = 0,
+  kLowSadLowSumdiff = 1,
+  kLowSadHighSumdiff = 2,
+  kHighSadLowSumdiff = 3,
+  kHighSadHighSumdiff = 4,
+} CONTENT_STATE_SB;
 
 typedef struct VP9EncoderConfig {
   BITSTREAM_PROFILE profile;
@@ -178,6 +192,9 @@ typedef struct VP9EncoderConfig {
   int cq_level;
   AQ_MODE aq_mode;  // Adaptive Quantization mode
 
+  // Special handling of Adaptive Quantization for AltRef frames
+  int alt_ref_aq;
+
   // Internal frame size scaling.
   RESIZE_TYPE resize_mode;
   int scaled_frame_width;
@@ -230,7 +247,7 @@ typedef struct VP9EncoderConfig {
 
   int max_threads;
 
-  int target_level;
+  unsigned int target_level;
 
   vpx_fixed_buf_t two_pass_stats_in;
   struct vpx_codec_pkt_list *output_pkt_list;
@@ -249,6 +266,9 @@ typedef struct VP9EncoderConfig {
   int render_width;
   int render_height;
   VP9E_TEMPORAL_LAYERING_MODE temporal_layering_mode;
+
+  int new_mt;
+  unsigned int ethread_bit_match;
 } VP9EncoderConfig;
 
 static INLINE int is_lossless_requested(const VP9EncoderConfig *cfg) {
@@ -260,14 +280,50 @@ typedef struct TileDataEnc {
   TileInfo tile_info;
   int thresh_freq_fact[BLOCK_SIZES][MAX_MODES];
   int mode_map[BLOCK_SIZES][MAX_MODES];
+  int m_search_count;
+  int ex_search_count;
+  FIRSTPASS_DATA fp_data;
+  VP9RowMTSync row_mt_sync;
+#if CONFIG_MULTITHREAD
+  pthread_mutex_t *search_count_mutex;
+  pthread_mutex_t *enc_row_mt_mutex;
+#endif
 } TileDataEnc;
+
+typedef struct RowMTInfo {
+  JobQueueHandle job_queue_hdl;
+#if CONFIG_MULTITHREAD
+  pthread_mutex_t job_mutex;
+#endif
+} RowMTInfo;
+
+typedef struct {
+  TOKENEXTRA *start;
+  TOKENEXTRA *stop;
+  unsigned int count;
+} TOKENLIST;
+
+typedef struct MultiThreadHandle {
+  int allocated_tile_rows;
+  int allocated_tile_cols;
+  int allocated_vert_unit_rows;
+
+  // Frame level params
+  int num_tile_vert_sbs[MAX_NUM_TILE_ROWS];
+
+  // Job Queue structure and handles
+  JobQueue *job_queue;
+
+  int jobs_per_tile_col;
+
+  RowMTInfo row_mt_info[MAX_NUM_TILE_COLS];
+  int thread_id_to_tile_id[MAX_NUM_THREADS];  // Mapping of threads to tiles
+} MultiThreadHandle;
 
 typedef struct RD_COUNTS {
   vp9_coeff_count coef_counts[TX_SIZES][PLANE_TYPES];
   int64_t comp_pred_diff[REFERENCE_MODES];
   int64_t filter_diff[SWITCHABLE_FILTER_CONTEXTS];
-  int m_search_count;
-  int ex_search_count;
 } RD_COUNTS;
 
 typedef struct ThreadData {
@@ -334,6 +390,8 @@ typedef struct {
   uint8_t max_ref_frame_buffers;
 } Vp9LevelSpec;
 
+extern const Vp9LevelSpec vp9_level_defs[VP9_LEVELS];
+
 typedef struct {
   int64_t ts;  // timestamp
   uint32_t luma_samples;
@@ -360,6 +418,34 @@ typedef struct {
   Vp9LevelStats level_stats;
   Vp9LevelSpec level_spec;
 } Vp9LevelInfo;
+
+typedef enum {
+  BITRATE_TOO_LARGE = 0,
+  LUMA_PIC_SIZE_TOO_LARGE = 1,
+  LUMA_SAMPLE_RATE_TOO_LARGE = 2,
+  CPB_TOO_LARGE = 3,
+  COMPRESSION_RATIO_TOO_SMALL = 4,
+  TOO_MANY_COLUMN_TILE = 5,
+  ALTREF_DIST_TOO_SMALL = 6,
+  TOO_MANY_REF_BUFFER = 7,
+  TARGET_LEVEL_FAIL_IDS = 8
+} TARGET_LEVEL_FAIL_ID;
+
+typedef struct {
+  int8_t level_index;
+  uint8_t rc_config_updated;
+  uint8_t fail_flag;
+  int max_frame_size;   // in bits
+  double max_cpb_size;  // in bits
+} LevelConstraint;
+
+typedef struct ARNRFilterData {
+  YV12_BUFFER_CONFIG *frames[MAX_LAG_BUFFERS];
+  int strength;
+  int frame_count;
+  int alt_ref_index;
+  struct scale_factors sf;
+} ARNRFilterData;
 
 typedef struct VP9_COMP {
   QUANTS quants;
@@ -411,6 +497,7 @@ typedef struct VP9_COMP {
 
   TOKENEXTRA *tile_tok[4][1 << 6];
   uint32_t tok_count[4][1 << 6];
+  TOKENLIST *tplist[4][1 << 6];
 
   // Ambient reconstruction err target for force key frames
   int64_t ambient_err;
@@ -481,6 +568,10 @@ typedef struct VP9_COMP {
   uint8_t force_update_segmentation;
 
   YV12_BUFFER_CONFIG alt_ref_buffer;
+
+  // class responsible for adaptive
+  // quantization of altref frames
+  struct ALT_REF_AQ *alt_ref_aq;
 
 #if CONFIG_INTERNAL_STATS
   unsigned int mode_chosen_counts[MAX_MODES];
@@ -583,6 +674,8 @@ typedef struct VP9_COMP {
   int64_t vbp_thresholds[4];
   int64_t vbp_threshold_minmax;
   int64_t vbp_threshold_sad;
+  // Threshold used for partition copy
+  int64_t vbp_threshold_copy;
   BLOCK_SIZE vbp_bsize_min;
 
   // Multi-threading
@@ -590,9 +683,31 @@ typedef struct VP9_COMP {
   VPxWorker *workers;
   struct EncWorkerData *tile_thr_data;
   VP9LfSync lf_row_sync;
+  struct VP9BitstreamWorkerData *vp9_bitstream_worker_data;
 
   int keep_level_stats;
   Vp9LevelInfo level_info;
+  MultiThreadHandle multi_thread_ctxt;
+  void (*row_mt_sync_read_ptr)(VP9RowMTSync *const, int, int);
+  void (*row_mt_sync_write_ptr)(VP9RowMTSync *const, int, int, const int);
+  ARNRFilterData arnr_filter_data;
+  int new_mt;
+
+  // Previous Partition Info
+  BLOCK_SIZE *prev_partition;
+  int8_t *prev_segment_id;
+  // Used to save the status of whether a block has a low variance in
+  // choose_partitioning. 0 for 64x64, 1~2 for 64x32, 3~4 for 32x64, 5~8 for
+  // 32x32, 9~24 for 16x16.
+  // This is for the last frame and is copied to the current frame
+  // when partition copy happens.
+  uint8_t *prev_variance_low;
+  uint8_t *copied_frame_cnt;
+  uint8_t max_copied_frame;
+
+  uint8_t *content_state_sb;
+
+  LevelConstraint level_constraint;
 } VP9_COMP;
 
 void vp9_initialize_enc(void);
@@ -691,6 +806,20 @@ static INLINE int allocated_tokens(TileInfo tile) {
   return get_token_alloc(tile_mb_rows, tile_mb_cols);
 }
 
+static INLINE void get_start_tok(VP9_COMP *cpi, int tile_row, int tile_col,
+                                 int mi_row, TOKENEXTRA **tok) {
+  VP9_COMMON *const cm = &cpi->common;
+  const int tile_cols = 1 << cm->log2_tile_cols;
+  TileDataEnc *this_tile = &cpi->tile_data[tile_row * tile_cols + tile_col];
+  const TileInfo *const tile_info = &this_tile->tile_info;
+
+  int tile_mb_cols = (tile_info->mi_col_end - tile_info->mi_col_start + 1) >> 1;
+  const int mb_row = (mi_row - tile_info->mi_row_start) >> 1;
+
+  *tok =
+      cpi->tile_tok[tile_row][tile_col] + get_token_alloc(mb_row, tile_mb_cols);
+}
+
 int64_t vp9_get_y_sse(const YV12_BUFFER_CONFIG *a, const YV12_BUFFER_CONFIG *b);
 #if CONFIG_VP9_HIGHBITDEPTH
 int64_t vp9_highbd_get_y_sse(const YV12_BUFFER_CONFIG *a,
@@ -723,8 +852,17 @@ static INLINE int is_one_pass_cbr_svc(const struct VP9_COMP *const cpi) {
   return (cpi->use_svc && cpi->oxcf.pass == 0);
 }
 
+#if CONFIG_VP9_TEMPORAL_DENOISING
+static INLINE int denoise_svc(const struct VP9_COMP *const cpi) {
+  return (!cpi->use_svc ||
+          (cpi->use_svc &&
+           cpi->svc.spatial_layer_id == cpi->svc.number_spatial_layers - 1));
+}
+#endif
+
 static INLINE int is_altref_enabled(const VP9_COMP *const cpi) {
-  return cpi->oxcf.mode != REALTIME && cpi->oxcf.lag_in_frames > 0 &&
+  return !(cpi->oxcf.mode == REALTIME && cpi->oxcf.rc_mode == VPX_CBR) &&
+         cpi->oxcf.lag_in_frames > 0 &&
          (cpi->oxcf.enable_auto_arf &&
           (!is_two_pass_svc(cpi) ||
            cpi->oxcf.ss_enable_auto_arf[cpi->svc.spatial_layer_id]));
@@ -747,9 +885,31 @@ static INLINE int *cond_cost_list(const struct VP9_COMP *cpi, int *cost_list) {
   return cpi->sf.mv.subpel_search_method != SUBPEL_TREE ? cost_list : NULL;
 }
 
+static INLINE int get_num_vert_units(TileInfo tile, int shift) {
+  int num_vert_units =
+      (tile.mi_row_end - tile.mi_row_start + (1 << shift) - 1) >> shift;
+  return num_vert_units;
+}
+
+static INLINE int get_num_cols(TileInfo tile, int shift) {
+  int num_cols =
+      (tile.mi_col_end - tile.mi_col_start + (1 << shift) - 1) >> shift;
+  return num_cols;
+}
+
+static INLINE int get_level_index(VP9_LEVEL level) {
+  int i;
+  for (i = 0; i < VP9_LEVELS; ++i) {
+    if (level == vp9_level_defs[i].level) return i;
+  }
+  return -1;
+}
+
 VP9_LEVEL vp9_get_level(const Vp9LevelSpec *const level_spec);
 
 void vp9_new_framerate(VP9_COMP *cpi, double framerate);
+
+void vp9_set_new_mt(VP9_COMP *cpi);
 
 #define LAYER_IDS_TO_IDX(sl, tl, num_tl) ((sl) * (num_tl) + (tl))
 

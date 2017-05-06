@@ -8,6 +8,7 @@
  *  be found in the AUTHORS file in the root of the source tree.
  */
 
+#include <assert.h>
 #include <stdio.h>
 #include <math.h>
 #include <limits.h>
@@ -30,6 +31,7 @@
 #include "encodemb.h"
 #include "vp8/encoder/quantize.h"
 #include "vpx_dsp/variance.h"
+#include "vpx_ports/system_state.h"
 #include "mcomp.h"
 #include "rdopt.h"
 #include "vpx_mem/vpx_mem.h"
@@ -107,8 +109,8 @@ const int vp8_ref_frame_order[MAX_MODES] = {
 
 static void fill_token_costs(
     int c[BLOCK_TYPES][COEF_BANDS][PREV_COEF_CONTEXTS][MAX_ENTROPY_TOKENS],
-    const vp8_prob
-        p[BLOCK_TYPES][COEF_BANDS][PREV_COEF_CONTEXTS][ENTROPY_NODES]) {
+    const vp8_prob p[BLOCK_TYPES][COEF_BANDS][PREV_COEF_CONTEXTS]
+                    [ENTROPY_NODES]) {
   int i, j, k;
 
   for (i = 0; i < BLOCK_TYPES; ++i) {
@@ -162,7 +164,7 @@ void vp8_initialize_rd_consts(VP8_COMP *cpi, MACROBLOCK *x, int Qvalue) {
   double capped_q = (Qvalue < 160) ? (double)Qvalue : 160.0;
   double rdconst = 2.80;
 
-  vp8_clear_system_state();
+  vpx_clear_system_state();
 
   /* Further tests required to see if optimum is different
    * for key frames, golden frames and arf frames.
@@ -606,9 +608,8 @@ static int rd_pick_intra4x4mby_modes(MACROBLOCK *mb, int *Rate, int *rate_y,
   for (i = 0; i < 16; ++i) {
     MODE_INFO *const mic = xd->mode_info_context;
     const int mis = xd->mode_info_stride;
-    B_PREDICTION_MODE UNINITIALIZED_IS_SAFE(best_mode);
-    int UNINITIALIZED_IS_SAFE(r), UNINITIALIZED_IS_SAFE(ry),
-        UNINITIALIZED_IS_SAFE(d);
+    B_PREDICTION_MODE best_mode = B_MODE_COUNT;
+    int r = 0, ry = 0, d = 0;
 
     if (mb->e_mbd.frame_type == KEY_FRAME) {
       const B_PREDICTION_MODE A = above_block_mode(mic, i, mis);
@@ -625,6 +626,7 @@ static int rd_pick_intra4x4mby_modes(MACROBLOCK *mb, int *Rate, int *rate_y,
     distortion += d;
     tot_rate_y += ry;
 
+    assert(best_mode != B_MODE_COUNT);
     mic->bmi[i].as_mode = best_mode;
 
     if (total_rd >= (int64_t)best_rd) break;
@@ -642,7 +644,7 @@ static int rd_pick_intra4x4mby_modes(MACROBLOCK *mb, int *Rate, int *rate_y,
 static int rd_pick_intra16x16mby_mode(MACROBLOCK *x, int *Rate, int *rate_y,
                                       int *Distortion) {
   MB_PREDICTION_MODE mode;
-  MB_PREDICTION_MODE UNINITIALIZED_IS_SAFE(mode_selected);
+  MB_PREDICTION_MODE mode_selected = MB_MODE_COUNT;
   int rate, ratey;
   int distortion;
   int best_rd = INT_MAX;
@@ -672,6 +674,7 @@ static int rd_pick_intra16x16mby_mode(MACROBLOCK *x, int *Rate, int *rate_y,
     }
   }
 
+  assert(mode_selected != MB_MODE_COUNT);
   xd->mode_info_context->mbmi.mode = mode_selected;
   return best_rd;
 }
@@ -739,9 +742,9 @@ static int rd_inter4x4_uv(VP8_COMP *cpi, MACROBLOCK *x, int *rate,
 static void rd_pick_intra_mbuv_mode(MACROBLOCK *x, int *rate,
                                     int *rate_tokenonly, int *distortion) {
   MB_PREDICTION_MODE mode;
-  MB_PREDICTION_MODE UNINITIALIZED_IS_SAFE(mode_selected);
+  MB_PREDICTION_MODE mode_selected = MB_MODE_COUNT;
   int best_rd = INT_MAX;
-  int UNINITIALIZED_IS_SAFE(d), UNINITIALIZED_IS_SAFE(r);
+  int d = 0, r = 0;
   int rate_to;
   MACROBLOCKD *xd = &x->e_mbd;
 
@@ -766,8 +769,8 @@ static void rd_pick_intra_mbuv_mode(MACROBLOCK *x, int *rate,
 
     rate_to = rd_cost_mbuv(x);
     this_rate = rate_to +
-                x->intra_uv_mode_cost[xd->frame_type][xd->mode_info_context
-                                                          ->mbmi.uv_mode];
+                x->intra_uv_mode_cost[xd->frame_type]
+                                     [xd->mode_info_context->mbmi.uv_mode];
 
     this_distortion = vp8_mbuverror(x) / 4;
 
@@ -785,6 +788,7 @@ static void rd_pick_intra_mbuv_mode(MACROBLOCK *x, int *rate,
   *rate = r;
   *distortion = d;
 
+  assert(mode_selected != MB_MODE_COUNT);
   xd->mode_info_context->mbmi.uv_mode = mode_selected;
 }
 
@@ -1999,9 +2003,8 @@ void vp8_rd_pick_inter_mode(VP8_COMP *cpi, MACROBLOCK *x, int recon_yoffset,
         macro_block_yrd(x, &rd.rate_y, &distortion);
         rd.rate2 += rd.rate_y;
         rd.distortion2 += distortion;
-        rd.rate2 +=
-            x->mbmode_cost[x->e_mbd.frame_type][x->e_mbd.mode_info_context->mbmi
-                                                    .mode];
+        rd.rate2 += x->mbmode_cost[x->e_mbd.frame_type]
+                                  [x->e_mbd.mode_info_context->mbmi.mode];
         rd.rate2 += uv_intra_rate;
         rd.rate_uv = uv_intra_rate_tokenonly;
         rd.distortion2 += uv_intra_distortion;
