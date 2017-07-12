@@ -91,7 +91,7 @@ extern "C" {
 #define sem_t HANDLE
 #define pause(voidpara) __asm PAUSE
 
-#ifdef WINRT
+#if defined(WINRT) || defined(RX64)
 #define sem_init(sem, sem_attr1, sem_init_value) \
   (int)((*sem = CreateSemaphoreEx(NULL, 0, 32768, NULL, 0, SEMAPHORE_ALL_ACCESS)) == NULL)
 #define sem_wait(sem) \
