@@ -1,5 +1,5 @@
 /*
- *  Copyright (c) 2015 The WebM project authors. All Rights Reserved.
+ *  Copyright (c) 2017 The WebM project authors. All Rights Reserved.
  *
  *  Use of this source code is governed by a BSD-style license
  *  that can be found in the LICENSE file in the root of the source
@@ -9,25 +9,24 @@
  */
 
 #include <assert.h>
-#include <emmintrin.h>
-#include <xmmintrin.h>
+#include <tmmintrin.h>
 
 #include "./vpx_dsp_rtcd.h"
 #include "vpx/vpx_integer.h"
 #include "vpx_dsp/x86/bitdepth_conversion_sse2.h"
 
-void vpx_quantize_b_sse2(const tran_low_t *coeff_ptr, intptr_t n_coeffs,
-                         int skip_block, const int16_t *zbin_ptr,
-                         const int16_t *round_ptr, const int16_t *quant_ptr,
-                         const int16_t *quant_shift_ptr, tran_low_t *qcoeff_ptr,
-                         tran_low_t *dqcoeff_ptr, const int16_t *dequant_ptr,
-                         uint16_t *eob_ptr, const int16_t *scan_ptr,
-                         const int16_t *iscan_ptr) {
+void vpx_quantize_b_ssse3(const tran_low_t *coeff_ptr, intptr_t n_coeffs,
+                          int skip_block, const int16_t *zbin_ptr,
+                          const int16_t *round_ptr, const int16_t *quant_ptr,
+                          const int16_t *quant_shift_ptr,
+                          tran_low_t *qcoeff_ptr, tran_low_t *dqcoeff_ptr,
+                          const int16_t *dequant_ptr, uint16_t *eob_ptr,
+                          const int16_t *scan_ptr, const int16_t *iscan_ptr) {
   const __m128i zero = _mm_setzero_si128();
-  int index = 16;
+  intptr_t index = 16;
 
   __m128i zbin, round, quant, dequant, shift;
-  __m128i coeff0, coeff1, coeff0_sign, coeff1_sign;
+  __m128i coeff0, coeff1;
   __m128i qcoeff0, qcoeff1;
   __m128i cmp_mask0, cmp_mask1;
   __m128i qtmp0, qtmp1;
@@ -40,9 +39,11 @@ void vpx_quantize_b_sse2(const tran_low_t *coeff_ptr, intptr_t n_coeffs,
 
   // Setup global values.
   zbin = _mm_load_si128((const __m128i *)zbin_ptr);
+  // x86 has no "greater *or equal* comparison. Subtract 1 from zbin so
+  // it is a strict "greater" comparison.
+  zbin = _mm_sub_epi16(zbin, _mm_set1_epi16(1));
   round = _mm_load_si128((const __m128i *)round_ptr);
   quant = _mm_load_si128((const __m128i *)quant_ptr);
-  zbin = _mm_sub_epi16(zbin, _mm_set1_epi16(1));
   dequant = _mm_load_si128((const __m128i *)dequant_ptr);
   shift = _mm_load_si128((const __m128i *)quant_shift_ptr);
 
@@ -50,13 +51,8 @@ void vpx_quantize_b_sse2(const tran_low_t *coeff_ptr, intptr_t n_coeffs,
   coeff0 = load_tran_low(coeff_ptr);
   coeff1 = load_tran_low(coeff_ptr + 8);
 
-  // Poor man's abs().
-  coeff0_sign = _mm_srai_epi16(coeff0, 15);
-  coeff1_sign = _mm_srai_epi16(coeff1, 15);
-  qcoeff0 = _mm_xor_si128(coeff0, coeff0_sign);
-  qcoeff1 = _mm_xor_si128(coeff1, coeff1_sign);
-  qcoeff0 = _mm_sub_epi16(qcoeff0, coeff0_sign);
-  qcoeff1 = _mm_sub_epi16(qcoeff1, coeff1_sign);
+  qcoeff0 = _mm_abs_epi16(coeff0);
+  qcoeff1 = _mm_abs_epi16(coeff1);
 
   cmp_mask0 = _mm_cmpgt_epi16(qcoeff0, zbin);
   zbin = _mm_unpackhi_epi64(zbin, zbin);  // Switch DC to AC
@@ -78,10 +74,8 @@ void vpx_quantize_b_sse2(const tran_low_t *coeff_ptr, intptr_t n_coeffs,
   qcoeff1 = _mm_mulhi_epi16(qtmp1, shift);
 
   // Reinsert signs
-  qcoeff0 = _mm_xor_si128(qcoeff0, coeff0_sign);
-  qcoeff1 = _mm_xor_si128(qcoeff1, coeff1_sign);
-  qcoeff0 = _mm_sub_epi16(qcoeff0, coeff0_sign);
-  qcoeff1 = _mm_sub_epi16(qcoeff1, coeff1_sign);
+  qcoeff0 = _mm_sign_epi16(qcoeff0, coeff0);
+  qcoeff1 = _mm_sign_epi16(qcoeff1, coeff1);
 
   // Mask out zbin threshold coeffs
   qcoeff0 = _mm_and_si128(qcoeff0, cmp_mask0);
@@ -114,12 +108,8 @@ void vpx_quantize_b_sse2(const tran_low_t *coeff_ptr, intptr_t n_coeffs,
     coeff0 = load_tran_low(coeff_ptr + index);
     coeff1 = load_tran_low(coeff_ptr + index + 8);
 
-    coeff0_sign = _mm_srai_epi16(coeff0, 15);
-    coeff1_sign = _mm_srai_epi16(coeff1, 15);
-    qcoeff0 = _mm_xor_si128(coeff0, coeff0_sign);
-    qcoeff1 = _mm_xor_si128(coeff1, coeff1_sign);
-    qcoeff0 = _mm_sub_epi16(qcoeff0, coeff0_sign);
-    qcoeff1 = _mm_sub_epi16(qcoeff1, coeff1_sign);
+    qcoeff0 = _mm_abs_epi16(coeff0);
+    qcoeff1 = _mm_abs_epi16(coeff1);
 
     cmp_mask0 = _mm_cmpgt_epi16(qcoeff0, zbin);
     cmp_mask1 = _mm_cmpgt_epi16(qcoeff1, zbin);
@@ -136,10 +126,8 @@ void vpx_quantize_b_sse2(const tran_low_t *coeff_ptr, intptr_t n_coeffs,
     qcoeff0 = _mm_mulhi_epi16(qtmp0, shift);
     qcoeff1 = _mm_mulhi_epi16(qtmp1, shift);
 
-    qcoeff0 = _mm_xor_si128(qcoeff0, coeff0_sign);
-    qcoeff1 = _mm_xor_si128(qcoeff1, coeff1_sign);
-    qcoeff0 = _mm_sub_epi16(qcoeff0, coeff0_sign);
-    qcoeff1 = _mm_sub_epi16(qcoeff1, coeff1_sign);
+    qcoeff0 = _mm_sign_epi16(qcoeff0, coeff0);
+    qcoeff1 = _mm_sign_epi16(qcoeff1, coeff1);
 
     qcoeff0 = _mm_and_si128(qcoeff0, cmp_mask0);
     qcoeff1 = _mm_and_si128(qcoeff1, cmp_mask1);
