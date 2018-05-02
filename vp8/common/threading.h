@@ -90,6 +90,7 @@ extern "C" {
 #if defined(_WIN32) && !HAVE_PTHREAD_H
 #define sem_t HANDLE
 #define pause(voidpara) __asm PAUSE
+
 #define sem_init(sem, sem_attr1, sem_init_value) \
   (int)((*sem = CreateSemaphore(NULL, 0, 32768, NULL)) == NULL)
 #define sem_wait(sem) \
