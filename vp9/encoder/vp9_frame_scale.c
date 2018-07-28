@@ -15,6 +15,10 @@
 #include "vpx_dsp/vpx_filter.h"
 #include "vpx_scale/yv12config.h"
 
+#pragma warning( disable : 4020)
+#pragma warning( disable : 4024)
+#pragma warning( disable : 4047)
+
 void vp9_scale_and_extend_frame_c(const YV12_BUFFER_CONFIG *src,
                                   YV12_BUFFER_CONFIG *dst,
                                   INTERP_FILTER filter_type, int phase_scaler) {

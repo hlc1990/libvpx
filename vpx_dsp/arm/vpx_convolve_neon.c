@@ -12,7 +12,14 @@
 
 #include "./vpx_dsp_rtcd.h"
 #include "vpx_dsp/vpx_dsp_common.h"
+#include "vpx_dsp/vpx_filter.h" 
 #include "vpx_ports/mem.h"
+
+#pragma warning( disable : 4020)
+#pragma warning( disable : 4024)
+#pragma warning( disable : 4028)
+#pragma warning( disable : 4029)
+#pragma warning( disable : 4047)
 
 void vpx_convolve8_neon(const uint8_t *src, ptrdiff_t src_stride, uint8_t *dst,
                         ptrdiff_t dst_stride, const InterpKernel *filter,

@@ -20,6 +20,9 @@
 extern "C" {
 #endif
 
+#pragma warning( disable : 4024)
+#pragma warning( disable : 4047)
+
 static INLINE void inter_predictor(const uint8_t *src, int src_stride,
                                    uint8_t *dst, int dst_stride,
                                    const int subpel_x, const int subpel_y,

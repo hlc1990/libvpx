@@ -13,6 +13,8 @@
 #include "vp9/common/vp9_scale.h"
 #include "vpx_dsp/vpx_filter.h"
 
+#pragma warning( disable : 4113)
+
 static INLINE int scaled_x(int val, const struct scale_factors *sf) {
   return (int)((int64_t)val * sf->x_scale_fp >> REF_SCALE_SHIFT);
 }

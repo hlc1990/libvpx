@@ -19,6 +19,10 @@
 #include "vpx_dsp/vpx_filter.h"
 #include "vpx_ports/mem.h"
 
+#pragma warning( disable : 4028)
+#pragma warning( disable : 4029)
+#pragma warning( disable : 4020)
+
 static void convolve_horiz(const uint8_t *src, ptrdiff_t src_stride,
                            uint8_t *dst, ptrdiff_t dst_stride,
                            const InterpKernel *x_filters, int x0_q4,

@@ -11,6 +11,7 @@
 #define VPX_DSP_VPX_CONVOLVE_H_
 
 #include "./vpx_config.h"
+#include "./vpx_filter.h"
 #include "vpx/vpx_integer.h"
 
 #ifdef __cplusplus

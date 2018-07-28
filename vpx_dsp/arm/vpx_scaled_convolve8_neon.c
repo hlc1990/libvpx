@@ -15,9 +15,13 @@
 #include "./vpx_config.h"
 #include "./vpx_dsp_rtcd.h"
 #include "vpx/vpx_integer.h"
+#include "vpx_dsp/vpx_filter.h"
 #include "vpx_dsp/arm/transpose_neon.h"
 #include "vpx_dsp/arm/vpx_convolve8_neon.h"
 #include "vpx_ports/mem.h"
+
+#pragma warning( disable : 4024)
+#pragma warning( disable : 4047)
 
 static INLINE void scaledconvolve_horiz_w4(
     const uint8_t *src, const ptrdiff_t src_stride, uint8_t *dst,

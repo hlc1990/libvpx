@@ -42,6 +42,8 @@
 #include "vp9/encoder/vp9_rdopt.h"
 #include "vp9/encoder/vp9_aq_variance.h"
 
+#pragma warning( disable : 4020)
+
 #define LAST_FRAME_MODE_MASK \
   ((1 << GOLDEN_FRAME) | (1 << ALTREF_FRAME) | (1 << INTRA_FRAME))
 #define GOLDEN_FRAME_MODE_MASK \

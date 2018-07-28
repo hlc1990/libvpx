@@ -35,6 +35,8 @@
 #include "vp9/encoder/vp9_ratectrl.h"
 #include "vp9/encoder/vp9_rd.h"
 
+#pragma warning( disable : 4020)
+
 typedef struct {
   uint8_t *data;
   int stride;
