@@ -22,6 +22,7 @@
 #include "../vpx_ports/vpx_timer.h"
 #include "vpx/vp8cx.h"
 #include "vpx/vpx_encoder.h"
+#include "vpx_ports/bitops.h"
 
 #include "../tools_common.h"
 #include "../video_writer.h"
@@ -591,7 +592,7 @@ int main(int argc, char **argv) {
 #if ROI_MAP
   vpx_roi_map_t roi;
 #endif
-  vpx_svc_layer_id_t layer_id = { 0, 0 };
+  vpx_svc_layer_id_t layer_id;
   const VpxInterface *encoder = NULL;
   FILE *infile = NULL;
   struct RateControlMetrics rc;
@@ -608,6 +609,8 @@ int main(int argc, char **argv) {
   double sum_bitrate2 = 0.0;
   double framerate = 30.0;
 
+  zero(rc.layer_target_bitrate);
+  memset(&layer_id, 0, sizeof(vpx_svc_layer_id_t));
   exec_name = argv[0];
   // Check usage and arguments.
   if (argc < min_args) {
@@ -808,7 +811,7 @@ int main(int argc, char **argv) {
     vpx_codec_control(&codec, VP9E_SET_NOISE_SENSITIVITY, kVp9DenoiserOff);
     vpx_codec_control(&codec, VP8E_SET_STATIC_THRESHOLD, 1);
     vpx_codec_control(&codec, VP9E_SET_TUNE_CONTENT, 0);
-    vpx_codec_control(&codec, VP9E_SET_TILE_COLUMNS, (cfg.g_threads >> 1));
+    vpx_codec_control(&codec, VP9E_SET_TILE_COLUMNS, get_msb(cfg.g_threads));
 #if ROI_MAP
     set_roi_map(encoder->name, &cfg, &roi);
     if (vpx_codec_control(&codec, VP9E_SET_ROI_MAP, &roi))
@@ -853,6 +856,7 @@ int main(int argc, char **argv) {
     layer_id.spatial_layer_id = 0;
     layer_id.temporal_layer_id =
         cfg.ts_layer_id[frame_cnt % cfg.ts_periodicity];
+    layer_id.temporal_layer_id_per_spatial[0] = layer_id.temporal_layer_id;
     if (strncmp(encoder->name, "vp9", 3) == 0) {
       vpx_codec_control(&codec, VP9E_SET_SVC_LAYER_ID, &layer_id);
     } else if (strncmp(encoder->name, "vp8", 3) == 0) {

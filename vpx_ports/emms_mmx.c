@@ -1,5 +1,5 @@
 /*
- *  Copyright (c) 2010 The WebM project authors. All Rights Reserved.
+ *  Copyright (c) 2018 The WebM project authors. All Rights Reserved.
  *
  *  Use of this source code is governed by a BSD-style license
  *  that can be found in the LICENSE file in the root of the source
@@ -8,9 +8,6 @@
  *  be found in the AUTHORS file in the root of the source tree.
  */
 
-#ifndef VPX_PORTS_CONFIG_H_
-#define VPX_PORTS_CONFIG_H_
+#include <mmintrin.h>
 
-#include "vpx_config.h"
-
-#endif  // VPX_PORTS_CONFIG_H_
+void vpx_clear_system_state() { _mm_empty(); }

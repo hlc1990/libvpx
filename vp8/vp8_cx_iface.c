@@ -258,9 +258,7 @@ static vpx_codec_err_t validate_img(vpx_codec_alg_priv_t *ctx,
                                     const vpx_image_t *img) {
   switch (img->fmt) {
     case VPX_IMG_FMT_YV12:
-    case VPX_IMG_FMT_I420:
-    case VPX_IMG_FMT_VPXI420:
-    case VPX_IMG_FMT_VPXYV12: break;
+    case VPX_IMG_FMT_I420: break;
     default:
       ERROR("Invalid image format. Only YV12 and I420 images are supported");
   }
@@ -917,6 +915,7 @@ static vpx_codec_err_t vp8e_encode(vpx_codec_alg_priv_t *ctx,
         pkt.data.frame.flags = lib_flags << 16;
         pkt.data.frame.width[0] = cpi->common.Width;
         pkt.data.frame.height[0] = cpi->common.Height;
+        pkt.data.frame.spatial_layer_encoded[0] = 1;
 
         if (lib_flags & FRAMEFLAGS_KEY) {
           pkt.data.frame.flags |= VPX_FRAME_IS_KEY;
