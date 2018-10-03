@@ -78,7 +78,7 @@ static INLINE int pthread_create(pthread_t *const thread, const void *attr,
 #ifdef USE_CREATE_THREAD
   *thread = CreateThread(NULL,          /* lpThreadAttributes */
                          0,             /* dwStackSize */
-                         start, arg, 0, /* dwStackSize */
+                         (LPTHREAD_START_ROUTINE)start, arg, 0, /* dwStackSize */
                          NULL);         /* lpThreadId */
 #else
   *thread = (pthread_t)_beginthreadex(NULL,          /* void *security */
