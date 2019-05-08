@@ -26,6 +26,20 @@ static INLINE uint32_t loadu_uint32(const void *src) {
   return v;
 }
 
+static INLINE __m128i load_unaligned_u32(const void *a) {
+  uint32_t val;
+  memcpy(&val, a, sizeof(val));
+  return _mm_cvtsi32_si128(val);
+}
+
+static INLINE void store_unaligned_u32(void *const a, const __m128i v) {
+  const uint32_t val = _mm_cvtsi128_si32(v);
+  memcpy(a, &val, sizeof(val));
+}
+
+#define mm_storelu(dst, v) memcpy((dst), (const char *)&(v), 8)
+#define mm_storehu(dst, v) memcpy((dst), (const char *)&(v) + 8, 8)
+
 static INLINE __m128i loadh_epi64(const __m128i s, const void *const src) {
   return _mm_castps_si128(
       _mm_loadh_pi(_mm_castsi128_ps(s), (const __m64 *)src));

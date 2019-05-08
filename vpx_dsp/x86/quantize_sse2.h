@@ -8,8 +8,8 @@
  *  be found in the AUTHORS file in the root of the source tree.
  */
 
-#ifndef VPX_VPX_DSP_X86_QUANTIZE_X86_H_
-#define VPX_VPX_DSP_X86_QUANTIZE_X86_H_
+#ifndef VPX_VPX_DSP_X86_QUANTIZE_SSE2_H_
+#define VPX_VPX_DSP_X86_QUANTIZE_SSE2_H_
 
 #include <emmintrin.h>
 
@@ -44,21 +44,35 @@ static INLINE void calculate_qcoeff(__m128i *coeff, const __m128i round,
   *coeff = _mm_mulhi_epi16(qcoeff, shift);
 }
 
-static INLINE __m128i calculate_dqcoeff(__m128i qcoeff, __m128i dequant) {
-  return _mm_mullo_epi16(qcoeff, dequant);
+static INLINE void calculate_dqcoeff_and_store(__m128i qcoeff, __m128i dequant,
+                                               tran_low_t *dqcoeff) {
+#if CONFIG_VP9_HIGHBITDEPTH
+  const __m128i low = _mm_mullo_epi16(qcoeff, dequant);
+  const __m128i high = _mm_mulhi_epi16(qcoeff, dequant);
+
+  const __m128i dqcoeff32_0 = _mm_unpacklo_epi16(low, high);
+  const __m128i dqcoeff32_1 = _mm_unpackhi_epi16(low, high);
+
+  _mm_store_si128((__m128i *)(dqcoeff), dqcoeff32_0);
+  _mm_store_si128((__m128i *)(dqcoeff + 4), dqcoeff32_1);
+#else
+  const __m128i dqcoeff16 = _mm_mullo_epi16(qcoeff, dequant);
+
+  _mm_store_si128((__m128i *)(dqcoeff), dqcoeff16);
+#endif  // CONFIG_VP9_HIGHBITDEPTH
 }
 
-// Scan 16 values for eob reference in scan_ptr. Use masks (-1) from comparing
-// to zbin to add 1 to the index in 'scan'.
+// Scan 16 values for eob reference in scan. Use masks (-1) from comparing to
+// zbin to add 1 to the index in 'scan'.
 static INLINE __m128i scan_for_eob(__m128i *coeff0, __m128i *coeff1,
                                    const __m128i zbin_mask0,
                                    const __m128i zbin_mask1,
-                                   const int16_t *scan_ptr, const int index,
+                                   const int16_t *scan, const int index,
                                    const __m128i zero) {
   const __m128i zero_coeff0 = _mm_cmpeq_epi16(*coeff0, zero);
   const __m128i zero_coeff1 = _mm_cmpeq_epi16(*coeff1, zero);
-  __m128i scan0 = _mm_load_si128((const __m128i *)(scan_ptr + index));
-  __m128i scan1 = _mm_load_si128((const __m128i *)(scan_ptr + index + 8));
+  __m128i scan0 = _mm_load_si128((const __m128i *)(scan + index));
+  __m128i scan1 = _mm_load_si128((const __m128i *)(scan + index + 8));
   __m128i eob0, eob1;
   // Add one to convert from indices to counts
   scan0 = _mm_sub_epi16(scan0, zbin_mask0);
@@ -79,4 +93,4 @@ static INLINE int16_t accumulate_eob(__m128i eob) {
   return _mm_extract_epi16(eob, 1);
 }
 
-#endif  // VPX_VPX_DSP_X86_QUANTIZE_X86_H_
+#endif  // VPX_VPX_DSP_X86_QUANTIZE_SSE2_H_

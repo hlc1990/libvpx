@@ -130,10 +130,10 @@ static vpx_codec_err_t update_error_state(
     return VPX_CODEC_INVALID_PARAM; \
   } while (0)
 
-#define RANGE_CHECK(p, memb, lo, hi)                                 \
-  do {                                                               \
-    if (!(((p)->memb == lo || (p)->memb > (lo)) && (p)->memb <= hi)) \
-      ERROR(#memb " out of range [" #lo ".." #hi "]");               \
+#define RANGE_CHECK(p, memb, lo, hi)                                     \
+  do {                                                                   \
+    if (!(((p)->memb == (lo) || (p)->memb > (lo)) && (p)->memb <= (hi))) \
+      ERROR(#memb " out of range [" #lo ".." #hi "]");                   \
   } while (0)
 
 #define RANGE_CHECK_HI(p, memb, hi)                                     \
@@ -262,10 +262,6 @@ static vpx_codec_err_t validate_config(vpx_codec_alg_priv_t *ctx,
   RANGE_CHECK(cfg, g_input_bit_depth, 8, 12);
   RANGE_CHECK(extra_cfg, content, VP9E_CONTENT_DEFAULT,
               VP9E_CONTENT_INVALID - 1);
-
-  // TODO(yaowu): remove this when ssim tuning is implemented for vp9
-  if (extra_cfg->tuning == VP8_TUNE_SSIM)
-    ERROR("Option --tune=ssim is not currently supported in VP9.");
 
 #if !CONFIG_REALTIME_ONLY
   if (cfg->g_pass == VPX_RC_LAST_PASS) {
@@ -698,7 +694,10 @@ static vpx_codec_err_t update_extra_cfg(vpx_codec_alg_priv_t *ctx,
 static vpx_codec_err_t ctrl_set_cpuused(vpx_codec_alg_priv_t *ctx,
                                         va_list args) {
   struct vp9_extracfg extra_cfg = ctx->extra_cfg;
+  // Use fastest speed setting (speed 9 or -9) if it's set beyond the range.
   extra_cfg.cpu_used = CAST(VP8E_SET_CPUUSED, args);
+  extra_cfg.cpu_used = VPXMIN(9, extra_cfg.cpu_used);
+  extra_cfg.cpu_used = VPXMAX(-9, extra_cfg.cpu_used);
   return update_extra_cfg(ctx, &extra_cfg);
 }
 
@@ -798,7 +797,7 @@ static vpx_codec_err_t ctrl_set_rc_max_inter_bitrate_pct(
     vpx_codec_alg_priv_t *ctx, va_list args) {
   struct vp9_extracfg extra_cfg = ctx->extra_cfg;
   extra_cfg.rc_max_inter_bitrate_pct =
-      CAST(VP8E_SET_MAX_INTER_BITRATE_PCT, args);
+      CAST(VP9E_SET_MAX_INTER_BITRATE_PCT, args);
   return update_extra_cfg(ctx, &extra_cfg);
 }
 
@@ -1151,6 +1150,7 @@ static vpx_codec_err_t encoder_encode(vpx_codec_alg_priv_t *ctx,
     unsigned char *cx_data;
 
     cpi->svc.timebase_fac = timebase_units_to_ticks(timebase, 1);
+    cpi->svc.time_stamp_superframe = dst_time_stamp;
 
     // Set up internal flags
     if (ctx->base.init_flags & VPX_CODEC_USE_PSNR) cpi->b_calculate_psnr = 1;
@@ -1625,6 +1625,14 @@ static vpx_codec_err_t ctrl_set_render_size(vpx_codec_alg_priv_t *ctx,
   return update_extra_cfg(ctx, &extra_cfg);
 }
 
+static vpx_codec_err_t ctrl_set_postencode_drop(vpx_codec_alg_priv_t *ctx,
+                                                va_list args) {
+  VP9_COMP *const cpi = ctx->cpi;
+  const unsigned int data = va_arg(args, unsigned int);
+  cpi->rc.ext_use_post_encode_drop = data;
+  return VPX_CODEC_OK;
+}
+
 static vpx_codec_ctrl_fn_map_t encoder_ctrl_maps[] = {
   { VP8_COPY_REFERENCE, ctrl_copy_reference },
 
@@ -1668,6 +1676,7 @@ static vpx_codec_ctrl_fn_map_t encoder_ctrl_maps[] = {
   { VP9E_SET_RENDER_SIZE, ctrl_set_render_size },
   { VP9E_SET_TARGET_LEVEL, ctrl_set_target_level },
   { VP9E_SET_ROW_MT, ctrl_set_row_mt },
+  { VP9E_SET_POSTENCODE_DROP, ctrl_set_postencode_drop },
   { VP9E_ENABLE_MOTION_VECTOR_UNIT_TEST, ctrl_enable_motion_vector_unit_test },
   { VP9E_SET_SVC_INTER_LAYER_PRED, ctrl_set_svc_inter_layer_pred },
   { VP9E_SET_SVC_FRAME_DROP_LAYER, ctrl_set_svc_frame_drop_layer },
@@ -1690,7 +1699,7 @@ static vpx_codec_enc_cfg_map_t encoder_usage_cfg_map[] = {
   { 0,
     {
         // NOLINT
-        0,  // g_usage
+        0,  // g_usage (unused)
         8,  // g_threads
         0,  // g_profile
 

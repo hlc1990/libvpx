@@ -57,6 +57,7 @@ LIBVPX_TEST_SRCS-$(CONFIG_VP9_ENCODER) += svc_datarate_test.cc
 LIBVPX_TEST_SRCS-$(CONFIG_VP9_ENCODER) += svc_test.cc
 LIBVPX_TEST_SRCS-$(CONFIG_VP9_ENCODER) += svc_test.h
 LIBVPX_TEST_SRCS-$(CONFIG_VP9_ENCODER) += svc_end_to_end_test.cc
+LIBVPX_TEST_SRCS-$(CONFIG_VP9_ENCODER) += timestamp_test.cc
 
 LIBVPX_TEST_SRCS-yes                   += decode_test_driver.cc
 LIBVPX_TEST_SRCS-yes                   += decode_test_driver.h
@@ -75,6 +76,7 @@ LIBWEBM_PARSER_SRCS += ../third_party/libwebm/mkvparser/mkvparser.cc
 LIBWEBM_PARSER_SRCS += ../third_party/libwebm/mkvparser/mkvreader.cc
 LIBWEBM_PARSER_SRCS += ../third_party/libwebm/mkvparser/mkvparser.h
 LIBWEBM_PARSER_SRCS += ../third_party/libwebm/mkvparser/mkvreader.h
+LIBWEBM_PARSER_SRCS += ../third_party/libwebm/common/webmids.h
 LIBVPX_TEST_SRCS-$(CONFIG_DECODERS)    += $(LIBWEBM_PARSER_SRCS)
 LIBVPX_TEST_SRCS-$(CONFIG_DECODERS)    += ../tools_common.h
 LIBVPX_TEST_SRCS-$(CONFIG_DECODERS)    += ../webmdec.cc
@@ -169,7 +171,7 @@ LIBVPX_TEST_SRCS-$(CONFIG_VP9_ENCODER) += hadamard_test.cc
 LIBVPX_TEST_SRCS-$(CONFIG_VP9_ENCODER) += minmax_test.cc
 LIBVPX_TEST_SRCS-$(CONFIG_VP9_ENCODER) += vp9_scale_test.cc
 ifneq ($(CONFIG_REALTIME_ONLY),yes)
-LIBVPX_TEST_SRCS-$(CONFIG_VP9_ENCODER) += temporal_filter_test.cc
+LIBVPX_TEST_SRCS-$(CONFIG_VP9_ENCODER) += yuv_temporal_filter_test.cc
 endif
 LIBVPX_TEST_SRCS-$(CONFIG_VP9_ENCODER) += variance_test.cc
 LIBVPX_TEST_SRCS-$(CONFIG_VP9_ENCODER) += vp9_block_error_test.cc

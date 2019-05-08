@@ -69,6 +69,7 @@ DSP_SRCS-$(HAVE_MSA) += mips/deblock_msa.c
 DSP_SRCS-$(HAVE_NEON) += arm/deblock_neon.c
 DSP_SRCS-$(HAVE_SSE2) += x86/add_noise_sse2.asm
 DSP_SRCS-$(HAVE_SSE2) += x86/deblock_sse2.asm
+DSP_SRCS-$(HAVE_SSE2) += x86/post_proc_sse2.c
 DSP_SRCS-$(HAVE_VSX) += ppc/deblock_vsx.c
 endif # CONFIG_POSTPROC
 
@@ -88,10 +89,12 @@ DSP_SRCS-yes += vpx_convolve.h
 DSP_SRCS-yes += vpx_filter.h
 
 DSP_SRCS-$(ARCH_X86)$(ARCH_X86_64) += x86/convolve.h
-DSP_SRCS-$(ARCH_X86)$(ARCH_X86_64) += x86/vpx_asm_stubs.c
+
+DSP_SRCS-$(HAVE_SSE2) += x86/convolve_sse2.h
 DSP_SRCS-$(HAVE_SSSE3) += x86/convolve_ssse3.h
 DSP_SRCS-$(HAVE_AVX2) += x86/convolve_avx2.h
 DSP_SRCS-$(HAVE_SSE2)  += x86/vpx_subpixel_8t_sse2.asm
+DSP_SRCS-$(HAVE_SSE2)  += x86/vpx_subpixel_4t_intrin_sse2.c
 DSP_SRCS-$(HAVE_SSE2)  += x86/vpx_subpixel_bilinear_sse2.asm
 DSP_SRCS-$(HAVE_SSSE3) += x86/vpx_subpixel_8t_ssse3.asm
 DSP_SRCS-$(HAVE_SSSE3) += x86/vpx_subpixel_bilinear_ssse3.asm
@@ -215,7 +218,11 @@ DSP_SRCS-$(HAVE_NEON)   += arm/fdct_partial_neon.c
 DSP_SRCS-$(HAVE_NEON)   += arm/fwd_txfm_neon.c
 DSP_SRCS-$(HAVE_MSA)    += mips/fwd_txfm_msa.h
 DSP_SRCS-$(HAVE_MSA)    += mips/fwd_txfm_msa.c
+
+ifneq ($(CONFIG_VP9_HIGHBITDEPTH),yes)
 DSP_SRCS-$(HAVE_MSA)    += mips/fwd_dct32x32_msa.c
+endif  # !CONFIG_VP9_HIGHBITDEPTH
+
 DSP_SRCS-$(HAVE_VSX)    += ppc/fdct32x32_vsx.c
 endif  # CONFIG_VP9_ENCODER
 
@@ -292,9 +299,10 @@ ifeq ($(CONFIG_VP9_ENCODER),yes)
 DSP_SRCS-yes            += quantize.c
 DSP_SRCS-yes            += quantize.h
 
-DSP_SRCS-$(HAVE_SSE2)   += x86/quantize_x86.h
 DSP_SRCS-$(HAVE_SSE2)   += x86/quantize_sse2.c
+DSP_SRCS-$(HAVE_SSE2)   += x86/quantize_sse2.h
 DSP_SRCS-$(HAVE_SSSE3)  += x86/quantize_ssse3.c
+DSP_SRCS-$(HAVE_SSSE3)  += x86/quantize_ssse3.h
 DSP_SRCS-$(HAVE_AVX)    += x86/quantize_avx.c
 DSP_SRCS-$(HAVE_NEON)   += arm/quantize_neon.c
 DSP_SRCS-$(HAVE_VSX)    += ppc/quantize_vsx.c

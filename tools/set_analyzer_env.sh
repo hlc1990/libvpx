@@ -13,6 +13,7 @@ sanitizer="${1}"
 
 case "${sanitizer}" in
   address) ;;
+  cfi) ;;
   integer) ;;
   memory) ;;
   thread) ;;
@@ -20,7 +21,7 @@ case "${sanitizer}" in
   clear)
     echo "Clearing environment:"
     set -x
-    unset CC CXX LD
+    unset CC CXX LD AR
     unset CFLAGS CXXFLAGS LDFLAGS
     unset ASAN_OPTIONS MSAN_OPTIONS TSAN_OPTIONS UBSAN_OPTIONS
     set +x
@@ -29,7 +30,7 @@ case "${sanitizer}" in
   *)
     echo "Usage: source set_analyzer_env.sh [<sanitizer>|clear]"
     echo "  Supported sanitizers:"
-    echo "    address integer memory thread undefined"
+    echo "    address cfi integer memory thread undefined"
     return 1
     ;;
 esac
@@ -74,6 +75,24 @@ cflags="${cflags} -fno-omit-frame-pointer"
 # Exact backtraces.
 cflags="${cflags} -fno-optimize-sibling-calls"
 
+if [ "${sanitizer}" = "cfi" ]; then
+  # https://clang.llvm.org/docs/ControlFlowIntegrity.html
+  cflags="${cflags} -fno-sanitize-trap=cfi -flto -fvisibility=hidden"
+  ldflags="${ldflags} -fno-sanitize-trap=cfi -flto -fuse-ld=gold"
+  export AR="llvm-ar"
+fi
+
+# TODO(http://crbug.com/webm/1615): -fsanitize=implicit-integer-truncation
+# causes conversion warnings in many of the x86 intrinsics and elsewhere.
+if [ "${sanitizer}" = "integer" ]; then
+  major_version=$(clang --version | head -n 1 \
+    | grep -o -E "[[:digit:]]\.[[:digit:]]\.[[:digit:]]" | cut -f1 -d.)
+  if [ ${major_version} -ge 7 ]; then
+    cflags="${cflags} -fno-sanitize=implicit-integer-truncation"
+    ldflags="${ldflags} -fno-sanitize=implicit-integer-truncation"
+  fi
+fi
+
 set -x
 export CC="clang"
 export CXX="clang++"
@@ -99,6 +118,9 @@ case "${sanitizer}" in
     set -x
     export ASAN_OPTIONS="${sanitizer_options}"
     set +x
+    ;;
+  cfi)
+    # No environment settings
     ;;
   memory)
     set -x

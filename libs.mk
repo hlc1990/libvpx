@@ -112,13 +112,6 @@ ifeq ($(CONFIG_DECODERS),yes)
   CODEC_DOC_SECTIONS += decoder
 endif
 
-# Suppress -Wextra warnings in third party code.
-$(BUILD_PFX)third_party/googletest/%.cc.o: CXXFLAGS += -Wno-missing-field-initializers
-# Suppress -Wextra warnings in first party code pending investigation.
-# https://bugs.chromium.org/p/webm/issues/detail?id=1069
-$(BUILD_PFX)vp8/encoder/onyx_if.c.o: CFLAGS += -Wno-unknown-warning-option -Wno-clobbered
-$(BUILD_PFX)vp8/decoder/onyxd_if.c.o: CFLAGS += -Wno-unknown-warning-option -Wno-clobbered
-
 ifeq ($(CONFIG_MSVS),yes)
 CODEC_LIB=$(if $(CONFIG_STATIC_MSVCRT),vpxmt,vpxmd)
 GTEST_LIB=$(if $(CONFIG_STATIC_MSVCRT),gtestmt,gtestmd)
@@ -240,7 +233,7 @@ OBJS-yes += $(LIBVPX_OBJS)
 LIBS-$(if yes,$(CONFIG_STATIC)) += $(BUILD_PFX)libvpx.a $(BUILD_PFX)libvpx_g.a
 $(BUILD_PFX)libvpx_g.a: $(LIBVPX_OBJS)
 
-SO_VERSION_MAJOR := 5
+SO_VERSION_MAJOR := 6
 SO_VERSION_MINOR := 0
 SO_VERSION_PATCH := 0
 ifeq ($(filter darwin%,$(TGT_OS)),$(TGT_OS))
