@@ -447,6 +447,9 @@ v_next
     vmov.u8     d22, #0x80
 
     orrs        r5, r5, r6                 ; Check for 0
+#if (defined(__clang__) && defined(_MSC_VER) && defined(_M_ARM))
+    it          eq
+#endif
     orreq       r7, r7, #1                 ; Only do filter branch
 
     vand        d17, d18, d16              ; flat2 && flat && mask
@@ -497,9 +500,15 @@ v_next
     veor        d26, d26, d22              ; *f_oq1 = u^0x80
 
     tst         r7, #1
+#if (defined(__clang__) && defined(_MSC_VER) && defined(_M_ARM))
+    it          ne
+#endif
     bxne        lr
 
     orrs        r5, r5, r6                 ; Check for 0
+#if (defined(__clang__) && defined(_MSC_VER) && defined(_M_ARM))
+    it          eq
+#endif
     orreq       r7, r7, #2                 ; Only do mbfilter branch
 
     ; mbfilter flat && mask branch
@@ -553,6 +562,9 @@ v_next
     vbif        d23, d10, d16              ; t_oq2 |= q2 & ~(flat & mask)
 
     tst         r7, #2
+#if (defined(__clang__) && defined(_MSC_VER) && defined(_M_ARM))
+    it          ne
+#endif
     bxne        lr
 
     ; wide_mbfilter flat2 && flat && mask branch

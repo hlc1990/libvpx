@@ -106,9 +106,15 @@ prolog
     vld1.u8         {d18},  [r3],   r2      ;src_tmp3 = vld1_u8(pu1_src_tmp);
     vmlsl.u8        q5,     d2,     d23     ;mul_res2 = vmull_u8(src_tmp3,
                                             ; coeffabs_1);
+#if (defined(__clang__) && defined(_MSC_VER) && defined(_M_ARM))
+    it              le
+#endif
     addle           r0,     r0,     r8
     vmlsl.u8        q5,     d1,     d22     ;mul_res2 = vmlsl_u8(mul_res2,
                                             ; src_tmp2, coeffabs_0);
+#if (defined(__clang__) && defined(_MSC_VER) && defined(_M_ARM))
+    it              le
+#endif
     bicle           r4,     r5,     #7      ;r5 ->wd
     vmlal.u8        q5,     d3,     d24     ;mul_res2 = vmlsl_u8(mul_res2,
                                             ; src_tmp4, coeffabs_2);
@@ -150,6 +156,9 @@ prolog
     vmlsl.u8        q6,     d17,    d29
     vld1.u8         {d20},  [r14]
     vqrshrun.s16    d10,    q5,     #6      ;sto_res = vqmovun_s16(sto_res_tmp);
+#if (defined(__clang__) && defined(_MSC_VER) && defined(_M_ARM))
+    it              le
+#endif
     addle           r1,     r1,     r9
     vmlsl.u8        q7,     d4,     d23
     subs            r7,     r7,     #4
@@ -181,6 +190,9 @@ main_loop_8
     vld1.u8         {d20},  [r14]
     vmlsl.u8        q4,     d0,     d22     ;mul_res1 = vmlsl_u8(mul_res1,
                                             ; src_tmp1, coeffabs_0);
+#if (defined(__clang__) && defined(_MSC_VER) && defined(_M_ARM))
+    itt             le
+#endif
     addle           r0,     r0,     r8
     bicle           r4,     r5,     #7      ;r5 ->wd
     vmlal.u8        q4,     d2,     d24     ;mul_res1 = vmlsl_u8(mul_res1,
@@ -227,6 +239,9 @@ main_loop_8
     add             r1,     r1,     #8
     vmlsl.u8        q5,     d7,     d28     ;mul_res2 = vmlal_u8(mul_res2,
                                             ; src_tmp4, coeffabs_6);
+#if (defined(__clang__) && defined(_MSC_VER) && defined(_M_ARM))
+    it              le
+#endif
     addle           r1,     r1,     r9
     vmlsl.u8        q5,     d16,    d29     ;mul_res2 = vmlsl_u8(mul_res2,
                                             ; src_tmp1, coeffabs_7);
@@ -367,6 +382,9 @@ end_loops
     tst             r5,     #7
     ldr             r1,     [sp],   #4
     ldr             r0,     [sp],   #4
+#if (defined(__clang__) && defined(_MSC_VER) && defined(_M_ARM))
+    itt             eq
+#endif
     vpopeq          {d8  -  d15}
     ldmfdeq         sp!,    {r4  -  r12,    r15} ;reload the registers from sp
     mov             r5,     #4

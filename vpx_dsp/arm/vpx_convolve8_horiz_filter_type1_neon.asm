@@ -66,6 +66,9 @@ start_loop_count
     ble             outer_loop_4
 
     cmp             r10,    #24
+#if (defined(__clang__) && defined(_MSC_VER) && defined(_M_ARM))
+    ittt            eq
+#endif
     moveq           r10,    #16
     addeq           r8,     #8
     addeq           r9,     #8
@@ -73,6 +76,9 @@ start_loop_count
     bge             outer_loop_16
 
     cmp             r10,    #12
+#if (defined(__clang__) && defined(_MSC_VER) && defined(_M_ARM))
+    itt             eq
+#endif
     addeq           r8,     #4
     addeq           r9,     #4
     b               outer_loop_8
@@ -266,10 +272,16 @@ inner_loop_16
     vmlal.u8        q11,    d5,     d26
     pld             [r12,   r2,     lsl #2]
     pld             [r4,    r2,     lsl #2]
+#if (defined(__clang__) && defined(_MSC_VER) && defined(_M_ARM))
+    itt             eq
+#endif
     addeq           r12,    r12,    r9      ;increment the src pointer by
                                             ; 2*src_strd-wd
     addeq           r4,     r12,    r2      ;pu1_src + src_strd
     vmlal.u8        q11,    d7,     d27
+#if (defined(__clang__) && defined(_MSC_VER) && defined(_M_ARM))
+    itt             eq
+#endif
     addeq           r1,     r1,     r8
     subeq           r14,    r14,    #2
     vmlal.u8        q11,    d13,    d28
@@ -303,6 +315,9 @@ inner_loop_16
     vqrshrun.s16    d11,    q11,    #6
     vmlal.u8        q4,     d6,     d27     ;mul_res = vmull_u8(src[0_3],
                                             ; coeffabs_3);
+#if (defined(__clang__) && defined(_MSC_VER) && defined(_M_ARM))
+    it              eq
+#endif
     moveq           r5,     r10
     vmlal.u8        q4,     d12,    d28     ;mul_res = vmlal_u8(src[0_4],
                                             ; coeffabs_4);
@@ -314,6 +329,9 @@ inner_loop_16
                                             ; coeffabs_6);
     vmlsl.u8        q4,     d18,    d31     ;mul_res = vmlsl_u8(src[0_7],
                                             ; coeffabs_7);
+#if (defined(__clang__) && defined(_MSC_VER) && defined(_M_ARM))
+    it              eq
+#endif
     addeq           r6,     r1,     r3      ;pu1_dst + dst_strd
     b               inner_loop_16
 

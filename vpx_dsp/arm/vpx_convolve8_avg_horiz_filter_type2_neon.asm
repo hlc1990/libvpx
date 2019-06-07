@@ -67,6 +67,9 @@ start_loop_count
     ble             outer_loop_4
 
     cmp             r10,    #24
+#if (defined(__clang__) && defined(_MSC_VER) && defined(_M_ARM))
+    ittt            eq
+#endif
     moveq           r10,    #16
     addeq           r8,     #8
     addeq           r9,     #8
@@ -74,6 +77,9 @@ start_loop_count
     bge             outer_loop_16
 
     cmp             r10,    #12
+#if (defined(__clang__) && defined(_MSC_VER) && defined(_M_ARM))
+    itt             eq
+#endif
     addeq           r8,     #4
     addeq           r9,     #4
     b               outer_loop_8
@@ -275,15 +281,24 @@ inner_loop_16
     vmlsl.u8        q11,    d5,     d26
     pld             [r12,   r2,     lsl #2]
     pld             [r4,    r2,     lsl #2]
+#if (defined(__clang__) && defined(_MSC_VER) && defined(_M_ARM))
+    itt             eq
+#endif
     addeq           r12,    r12,    r9      ;increment the src pointer by
                                             ; 2*src_strd-wd
     addeq           r4,     r12,    r2      ;pu1_src + src_strd
     vmlal.u8        q11,    d7,     d27
     vmlal.u8        q11,    d13,    d28
     vst1.8          {q4},   [r1]!           ;store the result pu1_dst
+#if (defined(__clang__) && defined(_MSC_VER) && defined(_M_ARM))
+    it              eq
+#endif
     subeq           r14,    r14,    #2
     vhadd.s16       q5,     q5,     q10
     vmlsl.u8        q11,    d15,    d29
+#if (defined(__clang__) && defined(_MSC_VER) && defined(_M_ARM))
+    it              eq
+#endif
     addeq           r1,     r1,     r8
     vmlal.u8        q11,    d17,    d30
     cmp             r14,    #0
@@ -304,6 +319,9 @@ inner_loop_16
     vdup.16         q10,    r7
     vld1.u32        {q3},   [r12],  r11
     add             r7,     r6,     #8
+#if (defined(__clang__) && defined(_MSC_VER) && defined(_M_ARM))
+    it              eq
+#endif
     moveq           r5,     r10
     vld1.u8         {d0},   [r6]
     vmlal.u8        q4,     d2,     d25     ;mul_res = vmlal_u8(src[0_1],
@@ -330,6 +348,9 @@ inner_loop_16
     vst1.8          {q5},   [r6]!           ;store the result pu1_dst
     vmlsl.u8        q4,     d18,    d31     ;mul_res = vmlsl_u8(src[0_7],
                                             ; coeffabs_7);
+#if (defined(__clang__) && defined(_MSC_VER) && defined(_M_ARM))
+    it              eq
+#endif
     addeq           r6,     r1,     r3      ;pu1_dst + dst_strd
     b               inner_loop_16
 
