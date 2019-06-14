@@ -11,7 +11,11 @@
 #ifndef VPX_VP9_COMMON_ARM_NEON_VP9_IHT_NEON_H_
 #define VPX_VP9_COMMON_ARM_NEON_VP9_IHT_NEON_H_
 
-#include <arm_neon.h>
+# if !defined(__clang__) && defined(_MSC_VER) && defined(_M_ARM64)
+#   include <arm64_neon.h>
+# else
+#   include <arm_neon.h>
+# endif
 
 #include "./vp9_rtcd.h"
 #include "./vpx_config.h"

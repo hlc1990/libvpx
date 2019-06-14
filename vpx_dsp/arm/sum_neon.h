@@ -11,7 +11,11 @@
 #ifndef VPX_VPX_DSP_ARM_SUM_NEON_H_
 #define VPX_VPX_DSP_ARM_SUM_NEON_H_
 
-#include <arm_neon.h>
+# if !defined(__clang__) && defined(_MSC_VER) && defined(_M_ARM64)
+#   include <arm64_neon.h>
+# else
+#   include <arm_neon.h>
+# endif
 
 #include "./vpx_config.h"
 #include "vpx/vpx_integer.h"

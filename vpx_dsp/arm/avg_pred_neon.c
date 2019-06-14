@@ -7,8 +7,12 @@
  *  in the file PATENTS.  All contributing project authors may
  *  be found in the AUTHORS file in the root of the source tree.
  */
+# if !defined(__clang__) && defined(_MSC_VER) && defined(_M_ARM64)
+#   include <arm64_neon.h>
+# else
+#   include <arm_neon.h>
+# endif
 
-#include <arm_neon.h>
 #include <assert.h>
 
 #include "./vpx_dsp_rtcd.h"
